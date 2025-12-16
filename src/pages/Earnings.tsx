@@ -2,16 +2,25 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { DollarSign, TrendingUp, Calendar } from "lucide-react";
 import { WeeklySalesChart } from "@/components/dashboard/SalesChart";
-
-const earningsHistory = [
-  { source: "Referral Commission", amount: "5.00", date: "Dec 14, 2025" },
-  { source: "Sales Commission", amount: "0.60", date: "Dec 15, 2025" },
-  { source: "Affiliate Signup Bonus", amount: "5.00", date: "Dec 10, 2025" },
-];
+import { useAffiliate, useTransactions, useEarningsStats } from "@/hooks/useUserData";
+import { format } from "date-fns";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Earnings() {
+  const { isAffiliate } = useAffiliate();
+  const { transactions, loading: transactionsLoading } = useTransactions();
+  const { stats, loading: statsLoading } = useEarningsStats();
+
+  // Filter to only commission transactions
+  const earningsTransactions = transactions.filter(t => t.type === "commission");
+
+  const getSourceDescription = (transaction: typeof transactions[0]) => {
+    const metadata = transaction.metadata as { source?: string };
+    return metadata?.source || transaction.description || "Commission";
+  };
+
   return (
-    <DashboardLayout>
+    <DashboardLayout isAffiliate={isAffiliate}>
       <div className="space-y-6">
         {/* Header */}
         <div className="animate-fade-in">
@@ -25,26 +34,34 @@ export default function Earnings() {
 
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <StatCard
-            title="Total Earnings"
-            value="GH¢10.60"
-            icon={DollarSign}
-            variant="purple"
-          />
-          <StatCard
-            title="This Month"
-            value="GH¢10.60"
-            icon={TrendingUp}
-            variant="green"
-            trend="+100%"
-            trendUp
-          />
-          <StatCard
-            title="This Week"
-            value="GH¢5.60"
-            icon={Calendar}
-            variant="blue"
-          />
+          {statsLoading ? (
+            [...Array(3)].map((_, i) => (
+              <Skeleton key={i} className="h-32" />
+            ))
+          ) : (
+            <>
+              <StatCard
+                title="Total Earnings"
+                value={`GH¢${stats.totalEarnings.toFixed(2)}`}
+                icon={DollarSign}
+                variant="purple"
+              />
+              <StatCard
+                title="This Month"
+                value={`GH¢${stats.thisMonth.toFixed(2)}`}
+                icon={TrendingUp}
+                variant="green"
+                trend={stats.totalEarnings > 0 ? `+${((stats.thisMonth / stats.totalEarnings) * 100).toFixed(0)}%` : undefined}
+                trendUp={stats.thisMonth > 0}
+              />
+              <StatCard
+                title="This Week"
+                value={`GH¢${stats.thisWeek.toFixed(2)}`}
+                icon={Calendar}
+                variant="blue"
+              />
+            </>
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -57,20 +74,32 @@ export default function Earnings() {
               <h3 className="text-lg font-semibold text-foreground">Recent Earnings</h3>
             </div>
             <div className="p-6 space-y-4">
-              {earningsHistory.map((item, i) => (
-                <div
-                  key={i}
-                  className="flex items-center justify-between p-4 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors"
-                >
-                  <div>
-                    <p className="font-medium text-foreground">{item.source}</p>
-                    <p className="text-sm text-muted-foreground">{item.date}</p>
-                  </div>
-                  <p className="text-lg font-bold text-stat-green-icon">
-                    +GH¢{item.amount}
-                  </p>
+              {transactionsLoading ? (
+                [...Array(3)].map((_, i) => (
+                  <Skeleton key={i} className="h-16" />
+                ))
+              ) : earningsTransactions.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No earnings yet. Start referring to earn commission!
                 </div>
-              ))}
+              ) : (
+                earningsTransactions.slice(0, 5).map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between p-4 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors"
+                  >
+                    <div>
+                      <p className="font-medium text-foreground">{getSourceDescription(item)}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {format(new Date(item.created_at), "MMM d, yyyy")}
+                      </p>
+                    </div>
+                    <p className="text-lg font-bold text-stat-green-icon">
+                      +GH¢{Number(item.amount).toFixed(2)}
+                    </p>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>

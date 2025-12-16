@@ -9,38 +9,18 @@ import { SalesPointsCard } from "@/components/dashboard/SalesPointsCard";
 import { ShoppingCart, PackageCheck, Users, Coins } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
-
-// Mock data - in real app this would come from API/state
-const isAffiliate = false;
-const username = "Kofi";
-const earnings = "5.60";
-
-const transactions = [
-  {
-    orderId: "#3991038",
-    msisdn: "0551234567",
-    value: "10GB",
-    status: "Delivered" as const,
-    time: "2 mins ago",
-  },
-  {
-    orderId: "#3991037",
-    msisdn: "0241234567",
-    value: "5GB",
-    status: "Delivered" as const,
-    time: "15 mins ago",
-  },
-  {
-    orderId: "#3991036",
-    msisdn: "0201234567",
-    value: "2GB",
-    status: "Pending" as const,
-    time: "1 hour ago",
-  },
-];
+import { useProfile, useAffiliate, useTransactions, useDashboardStats } from "@/hooks/useUserData";
+import { formatDistanceToNow } from "date-fns";
 
 export default function Index() {
   const navigate = useNavigate();
+  const { profile } = useProfile();
+  const { affiliate, isAffiliate } = useAffiliate();
+  const { transactions, loading: transactionsLoading } = useTransactions(5);
+  const { stats } = useDashboardStats();
+
+  const username = profile?.full_name?.split(" ")[0] || "User";
+  const availableEarnings = affiliate?.available_balance?.toFixed(2) || "0.00";
 
   const handleWithdraw = () => {
     if (!isAffiliate) {
@@ -55,13 +35,24 @@ export default function Index() {
     navigate("/withdrawals");
   };
 
+  // Transform transactions for display
+  const displayTransactions = transactions
+    .filter(t => t.type === "data_purchase")
+    .map(t => ({
+      orderId: `#${t.reference_id || t.id.slice(0, 7)}`,
+      msisdn: (t.metadata as { msisdn?: string })?.msisdn || "N/A",
+      value: (t.metadata as { value?: string })?.value || `GH¢${t.amount}`,
+      status: (t.status === "completed" ? "Delivered" : t.status === "pending" ? "Pending" : "Failed") as "Delivered" | "Pending" | "Failed",
+      time: formatDistanceToNow(new Date(t.created_at), { addSuffix: true }),
+    }));
+
   return (
-    <DashboardLayout>
+    <DashboardLayout isAffiliate={isAffiliate}>
       <div className="space-y-6">
         {/* Hero Section */}
         <HeroCard
           username={username}
-          earnings={earnings}
+          earnings={availableEarnings}
           onWithdraw={handleWithdraw}
         />
 
@@ -69,27 +60,25 @@ export default function Index() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
             title="Total Sales"
-            value="GH¢44.4"
+            value={`GH¢${stats.totalSales.toFixed(2)}`}
             icon={ShoppingCart}
             variant="purple"
-            trend="+12.5%"
-            trendUp
           />
           <StatCard
             title="Total Orders"
-            value="2"
+            value={stats.totalOrders.toString()}
             icon={PackageCheck}
             variant="green"
           />
           <StatCard
             title="Total Referrals"
-            value="0"
+            value={stats.totalReferrals.toString()}
             icon={Users}
             variant="blue"
           />
           <StatCard
             title="Total Commission"
-            value="GH¢0.067"
+            value={`GH¢${stats.totalCommission.toFixed(2)}`}
             icon={Coins}
             variant="pink"
           />
@@ -107,18 +96,19 @@ export default function Index() {
 
             {/* Transactions */}
             <TransactionsTable
-              title="Recent AT Transactions"
-              transactions={transactions}
+              title="Recent Transactions"
+              transactions={displayTransactions}
+              loading={transactionsLoading}
             />
           </div>
 
           {/* Right Column - 1/3 width */}
           <div className="space-y-6">
             <AccountOverview
-              recentTopUp="50.00"
-              lastLogin="Dec 15, 2025 • 10:32 AM"
+              recentTopUp={stats.totalSales.toFixed(2)}
+              lastLogin="Just now"
               lastLoginDevice="Web"
-              lastCommission="0"
+              lastCommission={stats.totalCommission.toFixed(2)}
             />
 
             {/* Affiliate CTA or Dashboard based on status */}
