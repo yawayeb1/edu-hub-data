@@ -11,31 +11,31 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-
-// Mock affiliate data
-const affiliateData = {
-  totalEarnings: "125.50",
-  totalWithdrawn: "100.00",
-  availableCommission: "25.50",
-  totalReferrals: 8,
-  referralCode: "KOFI2025",
-};
+import { useAffiliate, useReferrals } from "@/hooks/useUserData";
+import { useNavigate } from "react-router-dom";
+import { format } from "date-fns";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function AffiliateDashboard() {
   const [copied, setCopied] = useState(false);
+  const navigate = useNavigate();
+  const { affiliate, isAffiliate, loading: affiliateLoading } = useAffiliate();
+  const { referrals, loading: referralsLoading } = useReferrals();
 
   const copyReferralCode = () => {
-    navigator.clipboard.writeText(affiliateData.referralCode);
-    setCopied(true);
-    toast({
-      title: "Copied!",
-      description: "Referral code copied to clipboard",
-    });
-    setTimeout(() => setCopied(false), 2000);
+    if (affiliate?.referral_code) {
+      navigator.clipboard.writeText(affiliate.referral_code);
+      setCopied(true);
+      toast({
+        title: "Copied!",
+        description: "Referral code copied to clipboard",
+      });
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
   const handleWithdraw = () => {
-    if (parseFloat(affiliateData.availableCommission) <= 0) {
+    if (!affiliate || affiliate.available_balance <= 0) {
       toast({
         title: "No Earnings",
         description: "You don't have any available earnings to withdraw.",
@@ -43,14 +43,37 @@ export default function AffiliateDashboard() {
       });
       return;
     }
-    toast({
-      title: "Withdrawal Initiated",
-      description: `GH¢${affiliateData.availableCommission} will be sent to your account.`,
-    });
+    navigate("/withdrawals");
   };
 
+  // Redirect if not an affiliate
+  if (!affiliateLoading && !isAffiliate) {
+    navigate("/services/affiliate-program");
+    return null;
+  }
+
+  if (affiliateLoading) {
+    return (
+      <DashboardLayout isAffiliate={isAffiliate}>
+        <div className="space-y-6">
+          <Skeleton className="h-10 w-64" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <Skeleton key={i} className="h-32" />
+            ))}
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  const totalEarnings = affiliate?.total_earnings || 0;
+  const totalWithdrawn = affiliate?.total_withdrawn || 0;
+  const availableBalance = affiliate?.available_balance || 0;
+  const totalReferrals = referrals.length;
+
   return (
-    <DashboardLayout>
+    <DashboardLayout isAffiliate={isAffiliate}>
       <div className="space-y-6">
         {/* Header */}
         <div className="animate-fade-in">
@@ -66,25 +89,25 @@ export default function AffiliateDashboard() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
             title="Total Earnings"
-            value={`GH¢${affiliateData.totalEarnings}`}
+            value={`GH¢${totalEarnings.toFixed(2)}`}
             icon={DollarSign}
             variant="purple"
           />
           <StatCard
             title="Total Withdrawn"
-            value={`GH¢${affiliateData.totalWithdrawn}`}
+            value={`GH¢${totalWithdrawn.toFixed(2)}`}
             icon={Wallet}
             variant="green"
           />
           <StatCard
             title="Available Commission"
-            value={`GH¢${affiliateData.availableCommission}`}
+            value={`GH¢${availableBalance.toFixed(2)}`}
             icon={DollarSign}
             variant="orange"
           />
           <StatCard
             title="Total Referrals"
-            value={affiliateData.totalReferrals.toString()}
+            value={totalReferrals.toString()}
             icon={Users}
             variant="blue"
           />
@@ -100,7 +123,7 @@ export default function AffiliateDashboard() {
             <div className="flex items-center gap-3">
               <div className="flex-1 h-12 px-4 rounded-lg bg-muted/50 border border-border flex items-center">
                 <span className="text-lg font-mono font-bold text-primary">
-                  {affiliateData.referralCode}
+                  {affiliate?.referral_code || "N/A"}
                 </span>
               </div>
               <Button
@@ -108,6 +131,7 @@ export default function AffiliateDashboard() {
                 size="icon"
                 className="h-12 w-12"
                 onClick={copyReferralCode}
+                disabled={!affiliate?.referral_code}
               >
                 {copied ? (
                   <CheckCircle className="w-5 h-5 text-stat-green-icon" />
@@ -131,7 +155,7 @@ export default function AffiliateDashboard() {
               <div className="p-4 rounded-xl bg-stat-green">
                 <p className="text-sm text-muted-foreground">Available to withdraw</p>
                 <p className="text-3xl font-bold text-foreground">
-                  GH¢{affiliateData.availableCommission}
+                  GH¢{availableBalance.toFixed(2)}
                 </p>
               </div>
               <Button
@@ -139,7 +163,7 @@ export default function AffiliateDashboard() {
                 size="lg"
                 className="w-full"
                 onClick={handleWithdraw}
-                disabled={parseFloat(affiliateData.availableCommission) <= 0}
+                disabled={availableBalance <= 0}
               >
                 Withdraw Earnings
                 <ArrowRight className="w-4 h-4" />
@@ -175,34 +199,47 @@ export default function AffiliateDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {[
-                  { user: "Ama K.", status: "Active", commission: "5.00", date: "Dec 14, 2025" },
-                  { user: "Kwame B.", status: "Active", commission: "12.50", date: "Dec 12, 2025" },
-                  { user: "Akua M.", status: "Pending", commission: "0.00", date: "Dec 10, 2025" },
-                ].map((referral, i) => (
-                  <tr key={i} className="hover:bg-muted/20 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-foreground">
-                      {referral.user}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${
-                          referral.status === "Active"
-                            ? "bg-stat-green text-stat-green-icon"
-                            : "bg-stat-orange text-stat-orange-icon"
-                        }`}
-                      >
-                        {referral.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-foreground">
-                      GH¢{referral.commission}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
-                      {referral.date}
+                {referralsLoading ? (
+                  [...Array(3)].map((_, i) => (
+                    <tr key={i}>
+                      <td className="px-6 py-4"><Skeleton className="h-4 w-24" /></td>
+                      <td className="px-6 py-4"><Skeleton className="h-4 w-16" /></td>
+                      <td className="px-6 py-4"><Skeleton className="h-4 w-20" /></td>
+                      <td className="px-6 py-4"><Skeleton className="h-4 w-24" /></td>
+                    </tr>
+                  ))
+                ) : referrals.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-8 text-center text-muted-foreground">
+                      No referrals yet. Share your code to start earning!
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  referrals.map((referral) => (
+                    <tr key={referral.id} className="hover:bg-muted/20 transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-foreground">
+                        User #{referral.referred_id.slice(0, 8)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span
+                          className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${
+                            referral.status === "active" || referral.status === "converted"
+                              ? "bg-stat-green text-stat-green-icon"
+                              : "bg-stat-orange text-stat-orange-icon"
+                          }`}
+                        >
+                          {referral.status.charAt(0).toUpperCase() + referral.status.slice(1)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-foreground">
+                        GH¢{referral.commission_earned.toFixed(2)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
+                        {format(new Date(referral.created_at), "MMM d, yyyy")}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

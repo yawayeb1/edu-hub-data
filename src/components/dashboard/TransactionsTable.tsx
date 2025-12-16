@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface Transaction {
   orderId: string;
@@ -11,6 +12,7 @@ interface Transaction {
 interface TransactionsTableProps {
   transactions: Transaction[];
   title: string;
+  loading?: boolean;
 }
 
 const statusStyles = {
@@ -19,7 +21,7 @@ const statusStyles = {
   Failed: "bg-destructive/10 text-destructive",
 };
 
-export function TransactionsTable({ transactions, title }: TransactionsTableProps) {
+export function TransactionsTable({ transactions, title, loading }: TransactionsTableProps) {
   return (
     <div className="bg-card rounded-2xl shadow-card border border-border/50 overflow-hidden animate-fade-in">
       <div className="px-6 py-4 border-b border-border">
@@ -47,30 +49,48 @@ export function TransactionsTable({ transactions, title }: TransactionsTableProp
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {transactions.map((tx, i) => (
-              <tr key={i} className="hover:bg-muted/20 transition-colors">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-destructive">
-                  {tx.orderId}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
-                  {tx.msisdn}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground font-medium">
-                  {tx.value}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={cn(
-                    "inline-flex px-2.5 py-1 rounded-full text-xs font-medium",
-                    statusStyles[tx.status]
-                  )}>
-                    {tx.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
-                  {tx.time}
+            {loading ? (
+              [...Array(3)].map((_, i) => (
+                <tr key={i}>
+                  <td className="px-6 py-4"><Skeleton className="h-4 w-20" /></td>
+                  <td className="px-6 py-4"><Skeleton className="h-4 w-24" /></td>
+                  <td className="px-6 py-4"><Skeleton className="h-4 w-16" /></td>
+                  <td className="px-6 py-4"><Skeleton className="h-4 w-16" /></td>
+                  <td className="px-6 py-4"><Skeleton className="h-4 w-20" /></td>
+                </tr>
+              ))
+            ) : transactions.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-6 py-8 text-center text-muted-foreground">
+                  No transactions yet
                 </td>
               </tr>
-            ))}
+            ) : (
+              transactions.map((tx, i) => (
+                <tr key={i} className="hover:bg-muted/20 transition-colors">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-destructive">
+                    {tx.orderId}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
+                    {tx.msisdn}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground font-medium">
+                    {tx.value}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={cn(
+                      "inline-flex px-2.5 py-1 rounded-full text-xs font-medium",
+                      statusStyles[tx.status]
+                    )}>
+                      {tx.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
+                    {tx.time}
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
