@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 const benefits = [
   {
@@ -48,22 +50,109 @@ const benefits = [
 
 export default function AffiliateProgram() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [referralCode, setReferralCode] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isValidatingCode, setIsValidatingCode] = useState(false);
+  const [codeError, setCodeError] = useState<string | null>(null);
+
+  // Check if already an affiliate
+  useEffect(() => {
+    const checkAffiliateStatus = async () => {
+      if (!user) return;
+      
+      const { data } = await supabase
+        .from("affiliates")
+        .select("id")
+        .eq("user_id", user.id)
+        .single();
+
+      if (data) {
+        navigate("/affiliate");
+      }
+    };
+
+    checkAffiliateStatus();
+  }, [user, navigate]);
+
+  // Validate referral code when user finishes typing
+  useEffect(() => {
+    const validateCode = async () => {
+      if (!referralCode) {
+        setCodeError(null);
+        return;
+      }
+
+      setIsValidatingCode(true);
+      const { data, error } = await supabase
+        .from("affiliates")
+        .select("id, user_id")
+        .eq("referral_code", referralCode)
+        .single();
+
+      if (error || !data) {
+        setCodeError("Invalid referral code");
+      } else if (data.user_id === user?.id) {
+        setCodeError("You cannot use your own referral code");
+      } else {
+        setCodeError(null);
+      }
+      setIsValidatingCode(false);
+    };
+
+    const timeout = setTimeout(validateCode, 500);
+    return () => clearTimeout(timeout);
+  }, [referralCode, user?.id]);
 
   const handleJoin = async () => {
+    if (!user) {
+      toast({
+        title: "Please sign in",
+        description: "You need to be signed in to join the affiliate program",
+        variant: "destructive",
+      });
+      navigate("/auth");
+      return;
+    }
+
+    if (codeError && referralCode) {
+      toast({
+        title: "Invalid Referral Code",
+        description: codeError,
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsProcessing(true);
-    
-    // Simulate payment processing
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    
-    toast({
-      title: "Welcome to the Affiliate Program!",
-      description: "Your referral code has been generated. Start earning today!",
-    });
-    
-    setIsProcessing(false);
-    navigate("/affiliate");
+
+    try {
+      const { data, error } = await supabase.functions.invoke("initialize-paystack-payment", {
+        body: {
+          email: user.email,
+          referralCode: referralCode || null,
+        },
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (data.authorization_url) {
+        // Redirect to Paystack payment page
+        window.location.href = data.authorization_url;
+      } else {
+        throw new Error("Failed to initialize payment");
+      }
+    } catch (error: unknown) {
+      console.error("Payment error:", error);
+      toast({
+        title: "Payment Error",
+        description: error instanceof Error ? error.message : "Failed to initialize payment. Please try again.",
+        variant: "destructive",
+      });
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -134,11 +223,26 @@ export default function AffiliateProgram() {
                 value={referralCode}
                 onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
                 placeholder="Enter referral code if you have one"
-                className="w-full h-11 px-4 rounded-lg bg-muted/50 border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                className={`w-full h-11 px-4 rounded-lg bg-muted/50 border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary ${
+                  codeError ? "border-destructive" : "border-border"
+                }`}
               />
-              <p className="text-xs text-muted-foreground mt-1">
-                If someone referred you, enter their code to give them a bonus
-              </p>
+              {isValidatingCode && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Validating code...
+                </p>
+              )}
+              {codeError && !isValidatingCode && (
+                <p className="text-xs text-destructive mt-1">{codeError}</p>
+              )}
+              {!codeError && !isValidatingCode && referralCode && (
+                <p className="text-xs text-success mt-1">Valid referral code!</p>
+              )}
+              {!referralCode && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  If someone referred you, enter their code to give them a bonus
+                </p>
+              )}
             </div>
 
             <Button
@@ -146,12 +250,12 @@ export default function AffiliateProgram() {
               size="xl"
               className="w-full"
               onClick={handleJoin}
-              disabled={isProcessing}
+              disabled={isProcessing || (!!codeError && !!referralCode)}
             >
               {isProcessing ? (
                 <>
                   <RefreshCw className="w-5 h-5 animate-spin" />
-                  Processing Payment...
+                  Redirecting to Payment...
                 </>
               ) : (
                 <>

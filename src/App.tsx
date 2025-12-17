@@ -13,6 +13,7 @@ import Services from "./pages/Services";
 import Withdrawals from "./pages/Withdrawals";
 import Credits from "./pages/Credits";
 import Earnings from "./pages/Earnings";
+import AffiliateCallback from "./pages/AffiliateCallback";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
             <Route path="/services/affiliate-program" element={<ProtectedRoute><AffiliateProgram /></ProtectedRoute>} />
             <Route path="/services/:service" element={<ProtectedRoute><Services /></ProtectedRoute>} />
             <Route path="/affiliate" element={<ProtectedRoute><AffiliateDashboard /></ProtectedRoute>} />
+            <Route path="/affiliate/callback" element={<ProtectedRoute><AffiliateCallback /></ProtectedRoute>} />
             <Route path="/withdrawals" element={<ProtectedRoute><Withdrawals /></ProtectedRoute>} />
             <Route path="/credits" element={<ProtectedRoute><Credits /></ProtectedRoute>} />
             <Route path="/earnings" element={<ProtectedRoute><Earnings /></ProtectedRoute>} />
